@@ -1,20 +1,12 @@
 ---
-title: "第一次作业你的报告题目"
-CJKmainfont: Songti SC
-author: "your name"
-date: "`r Sys.Date()`"
+title: "武汉市二手房数据分析"
+author:
+  - 魏勤伟
+documentclass: ctexart
 output:
-  pdf_document:
-    latex_engine: xelatex
-  word_document:
-    toc: yes
-  html_document:
-    code_folding: show
+  rticles::ctex:
     fig_caption: yes
-    fig_width: 10
-    highlight: tango
     number_sections: yes
-    theme: cosmo
     toc: yes
 ---
 ```{r setup, include = FALSE,echo = FALSE}
@@ -28,15 +20,17 @@ library(scales)
 library(plotly)
 library(patchwork)
 library(ggrepel)
+library(showtext)
+showtext_auto(enable = TRUE)
 ```
 
 # 你的主要发现
 
-1. 发现1
+- 发现1：并不是房间数量越多，房价就越高
 
-1. 发现2
+- 发现2：武汉市房屋单价最大值比最小值高数十倍
   
-1. 发现3
+- 发现3：房屋主要朝向虽然朝南最多，但朝西方向的单价最高
     
 
 # 数据介绍
@@ -52,18 +46,25 @@ library(ggrepel)
  **说明：**数据仅用于教学；由于不清楚链家数据的展示规则，因此数据可能并不是武汉二手房市场的随机抽样，结论很可能有很大的偏差，甚至可能是错误的。
     
 ```{r}
-# 载入数据和预处理
+# 载入数据
+lj<- read_csv("data/2023-09-12_cleaned.csv")
 
-lj<- read_csv("/Users/jameschen/Documents/02_Teaching/12_quantitative_thinking_R/data/2023-09-12_cleaned.csv")
-# EDA ---------------------------------------------------------------------
-
-## 如下语句可以解决画图中的中文显示问题，当然你可以用showtext包来解决
-
-theme_set(theme(text = element_text(family="Songti SC",size = 10))) #这里family设置成你系统中的中文字体名。
-
-# 做一些数据预处理，比如把字符型变成factor。
-
+# 数据预处理
+# 1.缺失值处理
+# 1.1 统计各变量的缺失值情况
+missing_value = is.na(lj)
+# 初始化一个空向量来存储结果
+is_na_result = c()
+# 循环遍历列名
+for(i in colnames(missing_value)){# 根据列名读取数据
+  is_na_result <- append(is_na_result,c(key = i,value = sum(missing_value[,i])))
+}
+# 打印输出缺失值情况  
+is_na_result
 ```
+# 发现
+
+- 发现1：directions2、property_height、property_style、near_subway、if_2y、has_key、vr这些字段均存在NA值，需要在后续分析中注意处理
 
 # 数据概览
 
@@ -88,67 +89,157 @@ summary(lj)
 
 可以看到：
 
-- 直观结论1
+- 直观结论1:房屋主要朝向大部分为南或东南
 
-- 直观结论2
+- 直观结论2:大部分房子都是标称靠近地铁
 
-- ...
 
 # 探索性分析
+## 变量1price_sqm(房屋单价）的数值描述与图形
+```{r}
+max_price_sqm=max(lj$price_sqm/10000)
+min_price_sqm=min(lj$price_sqm/10000)
+med_price_sqm=median(lj$price_sqm/10000)
+mean_price_sqm=mean(lj$price_sqm/10000)
+price_sqm_result <- paste(
+  "武汉地区房屋单价情况分析，最高单价：",as.character(max_price_sqm),
+  "最低单价：",as.character(min_price_sqm),
+  "单价中位数：",as.character(med_price_sqm),
+  "单价平均值：",as.character(mean_price_sqm)
+  )
+print(price_sqm_result)#输出分析结果
+#利用直方图展示平均单价分布情况
+ggplot(data = lj,mapping = aes(x=price_sqm/10000))+
+  geom_histogram()+ labs(title = "平均单价分布情况", x = "平均单价（万元）", y = "数量")+
+  theme(plot.title = element_text(family="Songti SC",size=10,hjust = 0.5)) #居中显示
+```
+发现
 
-## 变量1的数值描述与图形
+- 发现1：二手房最高单价与最低单价差距巨大，达到数十倍。
+— 发现2：价格中位数小于均值，说明高价房屋数量大于低价房屋
+
+## 变量2bedrooms(房间数)的数值描述与图形
+```{r}
+max_bedrooms=max(lj$bedrooms)
+min_bedrooms=min(lj$bedrooms)
+med_bedrooms=median(lj$bedrooms)
+mean_bedrooms=mean(lj$bedrooms)
+bedrooms_result <- paste(
+  "武汉地区房屋房间数量情况分析，最大房间数：",as.character(max_bedrooms),
+  "最小房间数：",as.character(min_bedrooms),
+  "房间数中位数：",as.character(med_bedrooms),
+  "房间数平均值：",as.character(mean_bedrooms)
+  )
+print(bedrooms_result)#输出分析结果
+#利用条形图了解bedroom分布情况
+ggplot(data = lj,mapping = aes(x = bedrooms))+
+  geom_bar()+ labs(title = "房间数量分布情况", x = "房间数量（个）", y = "数量")+
+  theme(plot.title = element_text(family="Songti SC",size=10,hjust = 0.5)) #居中显示
+```
 
 发现：
 
-- 发现1
+- 发现1：大部分房子房间数在2-3个
+— 发现2：房屋数量大于5的房屋占比非常小
 
-- 发现2
+## 变量3 directions1(主要朝向) 的数值描述与图形
+```{r}
+#分组统计不同朝向的数量
+directions1_result <- lj %>%
+  group_by(directions1) %>%
+  summarise(count_directions1 = table(directions1))
+#输出不同朝向的数量结果
+print(directions1_result)
+#利用条形图展示不同朝向的分布情况
+ggplot(data = lj,mapping = aes(x = directions1))+
+  geom_bar()+ labs(title = "房屋朝向分布", x = "主要朝向", y = "数量")+
+  theme(plot.title = element_text(family="Songti SC",size=10,hjust = 0.5)) #居中显示
+```
 
-## 变量2的数值描述与图形
-
-发现：
-
-- 发现1
-
-- 发现2
-
-## 变量...的数值描述与图形
-
-发现：
-
-- 发现1
-
-- 发现2
-
-## 探索问题1
 
 发现：
 
-- 发现1
+- 发现1:绝大部分房型主要朝向为东南方向
 
-- 发现2
+- 发现2:各种朝向的房屋均价中位数差距不大，但极端值（均价偏高）中南朝向的较多，且离中位数差异最大
 
-## 探索问题2
+## 探索问题1：精装修价格与其他类型均价差异分析:
+
+```{r}
+lj_temp1 <- lj %>%
+  group_by(decoration) %>%
+  summarise(avg_ttl = mean(price_ttl),avg_sqm = mean(price_sqm/10000),avg_building_area = mean(building_area))
+lj_temp1
+#根据均价值绘制条形图
+ggplot(lj_temp1,aes(x = decoration))+
+  geom_bar(stat = "identity",aes(y = avg_sqm))+ labs(title = "装修类型对房屋均价差异分析折线图", x = "装修类型", y = "房屋均价")+
+  theme(plot.title = element_text(family="Songti SC",size=10,hjust = 0.5)) #居中显示
+```
+
+#根据总价值绘制条形图
+```{r}
+ggplot(lj_temp1,aes(x = decoration))+
+  geom_bar(stat = "identity",aes(y = avg_ttl))+ labs(title = "装修类型对房屋总价差异分析折线图", x = "装修类型", y = "房屋总价")+
+  theme(plot.title = element_text(family="Songti SC",size=10,hjust = 0.5)) #居中显示
+```
+
+#根据总平均面积绘制条形图
+```{r}
+ggplot(lj_temp1,aes(x = decoration))+
+  geom_bar(stat = "identity",aes(y = avg_building_area))+ labs(title = "装修类型对房屋总面积差异分析折线图", x = "装修类型", y = "房屋总面积")+
+  theme(plot.title = element_text(family="Songti SC",size=10,hjust = 0.5)) #居中显示
+```
 
 发现：
 
-- 发现1
+- 发现1：通过上图我们可以显著发现精装修的房屋均价、总价均高于其他装修形式的房屋
 
-- 发现2
+- 发现2：毛胚房的平均建筑面积是所有类型中最高的
 
-## 探索问题3
+#探索问题2：分析bedrooms(房间数)与price_ttl（房屋总价）之间的关系
+```{r}
+bedrooms_result1 <- lj %>%
+  group_by(bedrooms) %>%
+  summarise(price_ttl = mean(price_ttl))
+#输出房间数量与房屋总价之间关系结果
+print(bedrooms_result1)
+#利用散点图，分析房间数与房屋总价间趋势关系
+ggplot(lj,aes(x = bedrooms))+
+  geom_point(aes(y = building_area))+ labs(title = "房间数对房屋总价的影响分析", x = "房间数", y = "房屋总价")+
+  theme(plot.title = element_text(family="Songti SC",size=10,hjust = 0.5)) #居中显示
+```
 
 发现：
 
-- 发现1
+- 发现1：在1-4个房间的房型中，平均房屋总价与房间数量整体呈正比，但6个以上的房间的房型总价未发现明显规律，可能是因为在本数据集中相关样本数量太少导致
 
-- 发现2
+- 发现2：绝大部分时候房间数量越大，房屋总价越高
+
+## 探索问题3：directions1(主要朝向) 与price_sqm(平均房价)之间的关系
+```{r}
+directions1_result1 <- lj %>%
+  group_by(directions1) %>%
+  summarise(price_sqm = mean(price_sqm/10000))
+#输出不同朝向房型的平均房价分析结果
+print(directions1_result1)
+#利用箱线图分析房屋朝向与房价之间的分布关系
+ggplot(lj,aes(x = directions1))+
+  geom_boxplot(aes(y = price_sqm))+ labs(title = "房屋朝向对房屋均价的影响分析", x = "房间数", y = "房屋均价")+
+  theme(plot.title = element_text(family="Songti SC",size=10,hjust = 0.5)) #居中显示
+```
+
+发现：
+
+- 发现1：朝西方向的房屋平均的单价最高
+
+- 发现2：朝西北方向的房屋单价上四分位值与中位数较为接近，说明该方向上房间单价分布较为接近。
 
 ---
 
 # 发现总结
 
 用1-3段话总结你的发现。
-
-
-
+通过运用数据分析工具对3000个二手房数据的分析，打破了我的一些固有印象，主要发现如下：
+发现1：并不是房间数量越多，房价就越高
+发现2：武汉市房屋单价最大值比最小值高数十倍，说明贫富差距还是很大的
+发现3：房屋主要朝向虽然朝南最多，但朝西方向的单价最高，这个比较反直觉，需要进一步细化对朝西方向的房屋的抽样调查，了解为什么会这样
